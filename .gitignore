@@ -1,0 +1,14 @@
+/.env
+/customer-service/.env
+/customer-service/vendor/
+/customer-service/storage/logs/*.log
+/customer-service/database/test_customer_order.sqlite
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.angular/
+/auth-service/**/bin/
+/auth-service/**/obj/
+/auth-service/bin/
+/auth-service/obj/
+/.vs/
+/TestResults/

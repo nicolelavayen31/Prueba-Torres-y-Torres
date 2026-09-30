@@ -1,0 +1,291 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" routerLink="/" aria-label="OrderFlow dashboard">
+      <span class="brand-symbol"><mat-icon>all_inbox</mat-icon></span>
+      <span class="brand-name">orderflow</span>
+    </a>
+
+    <p class="nav-label">ESPACIO DE TRABAJO</p>
+    <nav class="primary-nav" aria-label="Navegación principal">
+      <button type="button" [class.active]="view() === 'dashboard'" (click)="selectView('dashboard')">
+        <mat-icon>grid_view</mat-icon><span>Resumen</span>
+      </button>
+      <button type="button" [class.active]="view() === 'customers'" (click)="selectView('customers')">
+        <mat-icon>groups</mat-icon><span>Clientes</span>
+        <span class="nav-count">{{ activeCustomerCount() }}</span>
+      </button>
+      <button type="button" [class.active]="view() === 'orders'" (click)="selectView('orders')">
+        <mat-icon>receipt_long</mat-icon><span>Pedidos</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="connection-state"><span class="connection-dot"></span> APIs conectadas</div>
+      <div class="profile-row">
+        <span class="avatar">{{ initials() }}</span>
+        <span class="profile-copy">
+          <strong>{{ auth.session()?.displayName || 'Mi cuenta' }}</strong>
+          <small>{{ auth.session()?.email }}</small>
+        </span>
+        <button mat-icon-button type="button" aria-label="Cerrar sesión" matTooltip="Cerrar sesión" (click)="logout()">
+          <mat-icon>logout</mat-icon>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-area">
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb">OPERACIONES <mat-icon>chevron_right</mat-icon> {{ pageTitle() | uppercase }}</p>
+        <h1>{{ pageTitle() }}</h1>
+      </div>
+      <div class="topbar-actions">
+        <span class="today-label">{{ today | date: 'EEEE, d MMMM' }}</span>
+        <button mat-stroked-button type="button" (click)="loadDashboard(); loadCustomers(); loadOrders()">
+          <mat-icon>sync</mat-icon><span>Actualizar</span>
+        </button>
+      </div>
+    </header>
+
+    @if (view() === 'dashboard') {
+      <section class="page-content dashboard-page">
+        <div class="welcome-line">
+          <div>
+            <h2>Vista general</h2>
+            <p>Una lectura rápida del movimiento de tu operación.</p>
+          </div>
+          <span class="period-chip"><mat-icon>calendar_today</mat-icon> {{ activityPeriod() === 'day' ? 'Últimos 30 días' : 'Últimos 12 meses' }}</span>
+        </div>
+
+        @if (loading()) {
+          <div class="loading-line"><span></span>Actualizando datos</div>
+        }
+
+        <div class="metric-grid">
+          <article class="metric metric--orders">
+            <div class="metric-heading"><span>Pedidos totales</span><mat-icon>receipt_long</mat-icon></div>
+            <strong>{{ stats()?.total_orders ?? 0 }}</strong>
+            <small>En todos los estados</small>
+          </article>
+          <article class="metric metric--completed">
+            <div class="metric-heading"><span>Completados</span><mat-icon>task_alt</mat-icon></div>
+            <strong>{{ stats()?.completed_orders ?? 0 }}</strong>
+            <small>{{ stats()?.total_revenue | currency: 'USD' : 'symbol' : '1.2-2' }} facturados</small>
+          </article>
+          <article class="metric metric--pending">
+            <div class="metric-heading"><span>Por atender</span><mat-icon>pending_actions</mat-icon></div>
+            <strong>{{ (stats()?.pending_orders ?? 0) + (stats()?.in_progress_orders ?? 0) }}</strong>
+            <small>{{ stats()?.pending_orders ?? 0 }} pendientes · {{ stats()?.in_progress_orders ?? 0 }} en curso</small>
+          </article>
+          <article class="metric metric--customers">
+            <div class="metric-heading"><span>Clientes activos</span><mat-icon>group</mat-icon></div>
+            <strong>{{ stats()?.active_customers ?? activeCustomerCount() }}</strong>
+            <small>De {{ stats()?.total_customers ?? customers().length }} registrados</small>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <section class="content-panel activity-panel">
+            <div class="section-heading">
+              <div><h3>Actividad de pedidos</h3><p>{{ activityPeriod() === 'day' ? 'Últimos 30 días' : 'Volumen mensual de los últimos 12 meses' }}</p></div>
+              <div class="activity-controls">
+                <mat-button-toggle-group [value]="activityPeriod()" (change)="setActivityPeriod($event.value)" aria-label="Periodo de actividad">
+                  <mat-button-toggle value="day">Día</mat-button-toggle>
+                  <mat-button-toggle value="month">Mes</mat-button-toggle>
+                </mat-button-toggle-group>
+                <span class="legend"><i></i> Pedidos</span>
+              </div>
+            </div>
+            @if (activityPoints().length) {
+              <div class="activity-chart" role="img" [attr.aria-label]="'Gráfico de actividad por ' + (activityPeriod() === 'day' ? 'día' : 'mes')">
+                @for (point of activityPoints(); track point.date) {
+                  <div class="chart-column" [title]="point.count + ' pedidos · ' + formatCurrency(point.total)">
+                    <span class="bar-value">{{ point.count }}</span>
+                    <div class="bar-track"><span class="bar-fill" [style.height.%]="activityHeight(point)"></span></div>
+                    <span class="bar-label">{{ activityLabel(point.date) }}</span>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="empty-chart"><mat-icon>query_stats</mat-icon><span>Aún no hay actividad para graficar.</span></div>
+            }
+          </section>
+
+          <section class="content-panel status-panel">
+            <div class="section-heading">
+              <div><h3>Estado de pedidos</h3><p>Distribución actual</p></div>
+              <button mat-icon-button type="button" aria-label="Ver pedidos" (click)="selectView('orders')"><mat-icon>arrow_outward</mat-icon></button>
+            </div>
+            <div class="status-total"><strong>{{ stats()?.total_orders ?? 0 }}</strong><span>pedidos en total</span></div>
+            <div class="status-list">
+              <div><span class="status-key status-key--pending"></span><span>Pendientes</span><strong>{{ stats()?.pending_orders ?? 0 }}</strong></div>
+              <div><span class="status-key status-key--progress"></span><span>En curso</span><strong>{{ stats()?.in_progress_orders ?? 0 }}</strong></div>
+              <div><span class="status-key status-key--complete"></span><span>Completados</span><strong>{{ stats()?.completed_orders ?? 0 }}</strong></div>
+              <div><span class="status-key status-key--cancelled"></span><span>Cancelados</span><strong>{{ stats()?.cancelled_orders ?? 0 }}</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="content-panel recent-panel">
+          <div class="section-heading">
+            <div><h3>Pedidos recientes</h3><p>Actividad más reciente de tu equipo</p></div>
+            <button mat-button type="button" (click)="selectView('orders')">Ver todos <mat-icon>arrow_forward</mat-icon></button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="numeric">Total</th></tr></thead>
+              <tbody>
+                @for (order of orders().slice(0, 5); track order.id) {
+                  <tr>
+                    <td class="order-number">#{{ order.id }}</td>
+                    <td>Cliente {{ order.customer_id }}</td>
+                    <td>{{ order.created_at | date: 'd MMM yyyy' }}</td>
+                    <td><span class="status-pill" [class]="'status-pill status-pill--' + order.status.toLowerCase()">{{ statusLabel(order.status) }}</span></td>
+                    <td class="numeric">{{ formatCurrency(order.total) }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="table-empty">Todavía no hay pedidos registrados.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    }
+
+    @if (view() === 'customers') {
+      <section class="page-content">
+        <div class="welcome-line">
+          <div><h2>Directorio de clientes</h2><p>{{ customers().length }} registros en tu cartera.</p></div>
+          <span class="period-chip"><mat-icon>group</mat-icon> {{ activeCustomerCount() }} activos</span>
+        </div>
+
+        <div class="management-grid">
+          <section class="content-panel table-panel">
+            <div class="section-heading">
+              <div><h3>Todos los clientes</h3><p>Información de contacto y actividad</p></div>
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Buscar cliente</mat-label><mat-icon matPrefix>search</mat-icon>
+                <input matInput #customerSearchInput placeholder="Nombre o correo" (input)="customerSearch.set(customerSearchInput.value)" />
+              </mat-form-field>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Cliente</th><th>Contacto</th><th>Estado</th><th class="numeric">Acciones</th></tr></thead>
+                <tbody>
+                  @for (customer of filteredCustomers(); track customer.id) {
+                    <tr>
+                      <td><div class="customer-cell"><span class="customer-avatar">{{ customer.name.slice(0, 1).toUpperCase() }}</span><span><strong>{{ customer.name }}</strong><small>#{{ customer.id }} · {{ customer.address || 'Sin dirección' }}</small></span></div></td>
+                      <td><span>{{ customer.email }}</span><small class="subline">{{ customer.phone || 'Sin teléfono' }}</small></td>
+                      <td><span class="active-marker" [class.active-marker--off]="!customer.is_active"><i></i>{{ customer.is_active ? 'Activo' : 'Inactivo' }}</span></td>
+                      <td class="numeric actions-cell">
+                        <button mat-icon-button type="button" aria-label="Editar cliente" matTooltip="Editar" (click)="editCustomer(customer)"><mat-icon>edit</mat-icon></button>
+                        @if (customer.is_active) { <button mat-icon-button type="button" aria-label="Desactivar cliente" matTooltip="Desactivar" (click)="archiveCustomer(customer)"><mat-icon>person_off</mat-icon></button> }
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="4" class="table-empty">No hay clientes que coincidan.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside class="content-panel form-panel">
+            <div class="section-heading"><div><h3>{{ editingCustomerId() ? 'Editar cliente' : 'Nuevo cliente' }}</h3><p>Completa los datos de contacto</p></div></div>
+            <form [formGroup]="customerForm" (ngSubmit)="submitCustomer()">
+              <mat-form-field appearance="outline"><mat-label>Nombre completo</mat-label><input matInput formControlName="name" />
+                @if (customerForm.controls.name.hasError('required') && customerForm.controls.name.touched) { <mat-error>El nombre es obligatorio.</mat-error> }
+              </mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Correo electrónico</mat-label><input matInput type="email" formControlName="email" />
+                @if (customerForm.controls.email.hasError('email') && customerForm.controls.email.touched) { <mat-error>Escribe un correo válido.</mat-error> }
+              </mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Teléfono</mat-label><input matInput formControlName="phone" /></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Dirección</mat-label><textarea matInput rows="2" formControlName="address"></textarea></mat-form-field>
+              <div class="form-actions">
+                @if (editingCustomerId()) { <button mat-button type="button" (click)="resetCustomerForm()">Cancelar</button> }
+                <button mat-flat-button color="primary" type="submit" [disabled]="saving()"><mat-icon>{{ editingCustomerId() ? 'save' : 'person_add' }}</mat-icon>{{ editingCustomerId() ? 'Guardar cambios' : 'Crear cliente' }}</button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </section>
+    }
+
+    @if (view() === 'orders') {
+      <section class="page-content">
+        <div class="welcome-line">
+          <div><h2>Flujo de pedidos</h2><p>Controla cada solicitud desde su creación hasta la entrega.</p></div>
+          <span class="period-chip"><mat-icon>receipt_long</mat-icon> {{ orders().length }} pedidos mostrados</span>
+        </div>
+
+        <section class="content-panel filters-panel">
+          <div class="section-heading"><div><h3>Filtrar pedidos</h3><p>Acota los resultados por estado, cliente o fecha</p></div></div>
+          <form class="filter-row" [formGroup]="orderFilterForm" (ngSubmit)="loadOrders()">
+            <mat-form-field appearance="outline"><mat-label>Estado</mat-label><mat-select formControlName="status"><mat-option value="">Todos</mat-option><mat-option value="Pending">Pendiente</mat-option><mat-option value="InProgress">En curso</mat-option><mat-option value="Completed">Completado</mat-option><mat-option value="Cancelled">Cancelado</mat-option></mat-select></mat-form-field>
+            <mat-form-field appearance="outline"><mat-label>Cliente</mat-label><mat-select formControlName="customer_id"><mat-option value="">Todos</mat-option>@for (customer of customers(); track customer.id) { <mat-option [value]="customer.id.toString()">{{ customer.name }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field appearance="outline"><mat-label>Desde</mat-label><input matInput type="date" formControlName="date_from" /></mat-form-field>
+            <mat-form-field appearance="outline"><mat-label>Hasta</mat-label><input matInput type="date" formControlName="date_to" /></mat-form-field>
+            <button mat-flat-button color="primary" type="submit"><mat-icon>filter_alt</mat-icon>Aplicar</button>
+          </form>
+        </section>
+
+        <div class="management-grid order-grid">
+          <section class="content-panel table-panel">
+            <div class="section-heading"><div><h3>Pedidos</h3><p>Acciones según el estado actual</p></div></div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th class="numeric">Total</th><th class="numeric">Acciones</th></tr></thead>
+                <tbody>
+                  @for (order of orders(); track order.id) {
+                    <tr>
+                      <td><span class="order-number">#{{ order.id }}</span><small class="subline">{{ order.items.length }} ítems</small></td>
+                      <td>Cliente {{ order.customer_id }}</td>
+                      <td>{{ order.created_at | date: 'd MMM yyyy' }}</td>
+                      <td><span class="status-pill" [class]="'status-pill status-pill--' + order.status.toLowerCase()">{{ statusLabel(order.status) }}</span></td>
+                      <td class="numeric">{{ formatCurrency(order.total) }}</td>
+                      <td class="numeric actions-cell">
+                        @if (order.status === 'Pending' || order.status === 'InProgress') {
+                          <button mat-icon-button type="button" aria-label="Editar pedido" matTooltip="Editar pedido" (click)="editOrder(order)"><mat-icon>edit</mat-icon></button>
+                          <button mat-icon-button type="button" aria-label="Completar pedido" matTooltip="Completar" (click)="transitionOrder(order, 'complete')"><mat-icon>task_alt</mat-icon></button>
+                          <button mat-icon-button type="button" aria-label="Cancelar pedido" matTooltip="Cancelar" (click)="transitionOrder(order, 'cancel')"><mat-icon>block</mat-icon></button>
+                        }
+                        <button mat-icon-button type="button" aria-label="Eliminar pedido" matTooltip="Eliminar" (click)="deleteOrder(order)"><mat-icon>delete_outline</mat-icon></button>
+                      </td>
+                    </tr>
+                  } @empty { <tr><td colspan="6" class="table-empty">No hay pedidos con esos filtros.</td></tr> }
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside class="content-panel form-panel">
+            <div class="section-heading"><div><h3>{{ editingOrderId() ? 'Editar pedido #' + editingOrderId() : 'Nuevo pedido' }}</h3><p>{{ editingOrderId() ? 'Actualiza cliente, notas e ítems' : 'Asócialo a un cliente e incluye sus ítems' }}</p></div></div>
+            <form [formGroup]="orderForm" (ngSubmit)="submitOrder()">
+              <mat-form-field appearance="outline"><mat-label>Cliente</mat-label><mat-select formControlName="customer_id"><mat-option [value]="0" disabled>Selecciona un cliente</mat-option>@for (customer of customers(); track customer.id) { @if (customer.is_active || customer.id === orderForm.controls.customer_id.value) { <mat-option [value]="customer.id">{{ customer.name }}</mat-option> } }</mat-select>
+                @if (orderForm.controls.customer_id.hasError('min') && orderForm.controls.customer_id.touched) { <mat-error>Selecciona un cliente.</mat-error> }
+              </mat-form-field>
+              <div class="order-items-editor" formArrayName="items">
+                <div class="editor-heading"><span>Ítems del pedido</span><span>{{ orderItems.length }}</span></div>
+                @for (itemControl of orderItems.controls; track itemControl; let itemIndex = $index) {
+                  <div class="order-item-editor" [formGroupName]="itemIndex">
+                    <mat-form-field appearance="outline"><mat-label>Descripción</mat-label><input matInput formControlName="description" /></mat-form-field>
+                    <div class="split-fields"><mat-form-field appearance="outline"><mat-label>Cantidad</mat-label><input matInput type="number" min="1" formControlName="quantity" /></mat-form-field><mat-form-field appearance="outline"><mat-label>Precio unitario</mat-label><input matInput type="number" min="0" step="0.01" formControlName="unit_price" /></mat-form-field></div>
+                    @if (orderItems.length > 1) { <button mat-button color="warn" type="button" class="remove-item" (click)="removeOrderItem(itemIndex)"><mat-icon>remove_circle_outline</mat-icon>Quitar ítem</button> }
+                  </div>
+                }
+              </div>
+              <button mat-stroked-button type="button" class="add-item-button" (click)="addOrderItem()"><mat-icon>add</mat-icon>Agregar otro ítem</button>
+              <mat-form-field appearance="outline"><mat-label>Notas</mat-label><textarea matInput rows="2" formControlName="notes"></textarea></mat-form-field>
+              <div class="form-actions">
+                @if (editingOrderId()) { <button mat-button type="button" (click)="resetOrderForm()">Cancelar</button> }
+                <button mat-flat-button color="primary" class="wide-button" type="submit" [disabled]="saving()"><mat-icon>{{ editingOrderId() ? 'save' : 'add' }}</mat-icon>{{ editingOrderId() ? 'Guardar pedido' : 'Crear pedido' }}</button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </section>
+    }
+  </main>
+</div>

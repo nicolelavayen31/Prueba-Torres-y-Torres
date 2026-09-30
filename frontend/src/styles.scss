@@ -1,0 +1,30 @@
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+$orderflow-theme: mat.define-light-theme((
+	color: (
+		primary: mat.define-palette(mat.$teal-palette, 800, 700, 900),
+		accent: mat.define-palette(mat.$lime-palette, A200, A100, A400),
+		warn: mat.define-palette(mat.$deep-orange-palette),
+	),
+	typography: mat.define-typography-config($font-family: 'DM Sans, sans-serif'),
+	density: 0,
+));
+
+@include mat.all-component-themes($orderflow-theme);
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; margin: 0; }
+
+body {
+	background: #f4f6f4;
+	color: #203033;
+	font-family: 'DM Sans', sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, select { font: inherit; }
+
+h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; letter-spacing: 0; }

@@ -1,0 +1,6 @@
+.env
+.git
+vendor
+node_modules
+storage/logs/*.log
+database/test_customer_order.sqlite

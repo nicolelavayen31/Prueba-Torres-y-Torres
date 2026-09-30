@@ -1,0 +1,85 @@
+name: orderflow
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Run scripts/New-LocalEnv.ps1 first}
+    ports:
+      - "${SQL_PORT:-14330}:1433"
+    volumes:
+      - orderflow_sql_data:/var/opt/mssql
+    restart: unless-stopped
+
+  database-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    depends_on:
+      - sqlserver
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Run scripts/New-LocalEnv.ps1 first}
+    volumes:
+      - ./database:/database:ro
+      - ./scripts/init-database.sh:/init-database.sh:ro
+    entrypoint: ["/bin/bash", "/init-database.sh"]
+    restart: "no"
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    depends_on:
+      database-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__AuthDb: "Server=sqlserver,1433;Database=CustomerOrdersDB;User ID=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connection Timeout=30"
+      Authentication__Jwt__Issuer: AuthService
+      Authentication__Jwt__Audience: AuthService.Client
+      Authentication__Jwt__SigningKey: ${AUTH_JWT_SIGNING_KEY:?Run scripts/New-LocalEnv.ps1 first}
+    ports:
+      - "5087:8080"
+    restart: unless-stopped
+
+  customer-service:
+    build:
+      context: ./customer-service
+      dockerfile: Dockerfile
+    depends_on:
+      database-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+      APP_KEY: ${LARAVEL_APP_KEY:?Run scripts/New-LocalEnv.ps1 first}
+      DB_CONNECTION: sqlsrv
+      DB_HOST: sqlserver
+      DB_PORT: "1433"
+      DB_DATABASE: CustomerOrdersDB
+      DB_USERNAME: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_ENCRYPT: "yes"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      JWT_SECRET: ${AUTH_JWT_SIGNING_KEY:?Run scripts/New-LocalEnv.ps1 first}
+      JWT_ISSUER: AuthService
+      JWT_AUDIENCE: AuthService.Client
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - auth-service
+      - customer-service
+    ports:
+      - "4200:80"
+    restart: unless-stopped
+
+volumes:
+  orderflow_sql_data:
