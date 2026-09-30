@@ -1,14 +1,24 @@
-/.env
-/customer-service/.env
-/customer-service/vendor/
-/customer-service/storage/logs/*.log
-/customer-service/database/test_customer_order.sqlite
-/frontend/node_modules/
-/frontend/dist/
-/frontend/.angular/
-/auth-service/**/bin/
-/auth-service/**/obj/
-/auth-service/bin/
-/auth-service/obj/
-/.vs/
-/TestResults/
+# Dependencies
+node_modules/
+**/node_modules/
+vendor/
+**/vendor/
+
+# Angular & Frontend
+.angular/
+**/dist/
+**/coverage/
+
+# .NET & IDE
+bin/
+obj/
+**/bin/
+**/obj/
+.vs/
+TestResults/
+
+# Environment & Logs
+*.env
+.env
+*.log
+*.sqlite
